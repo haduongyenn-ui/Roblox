@@ -1,7 +1,7 @@
 export async function onRequestPost(context) {
   const API_KEY = context.env.API_KEY;
   const BOT_TOKEN = context.env.BOT_TOKEN;
-  const ALLOWED_GROUP_ID_ENV = context.env.ALLOWED_GROUP_ID || "";
+  const ALLOWED_GROUP_ID_ENV = context.env.ALLOWED_GROUP_ID || ""; 
   
   const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -14,52 +14,56 @@ export async function onRequestPost(context) {
     const chatId = message.chat.id;
     const chatType = message.chat.type;
     const text = message.text.trim();
+    
+    // Lấy thông tin người gửi để nhắc tên
+    const user = message.from;
+    const firstName = user.first_name || "Bạn";
+    const mentionUser = `[${firstName}](tg://user?id=${user.id})`;
 
-    // 🕵️‍♂️ LỆNH ẨN: Ép bot đọc ID mọi lúc mọi nơi
+    // 🕵️‍♂️ LỆNH /id
     if (text === "/id" || text.startsWith("/id@")) {
-        await sendMessage(TELEGRAM_API, chatId, `🎯 ID của Group này là: \`${chatId}\``);
+        await sendMessage(TELEGRAM_API, chatId, `🎯 **ID của cuộc trò chuyện này là:**\n\`${chatId}\``);
         return new Response("OK");
     }
 
-    // 2. CHỐT CHẶN BẢO MẬT
+    // 2. KIỂM TRA QUYỀN TRUY CẬP
     const allowedGroups = ALLOWED_GROUP_ID_ENV.split(",").map(id => id.trim());
     const isPrivate = chatType === "private";
     const isAllowedGroup = allowedGroups.includes(String(chatId));
 
     if (!isPrivate && !isAllowedGroup) {
-        // NẾU SAI ID GROUP, BOT SẼ HÉT LÊN THAY VÌ IM LẶNG
-        await sendMessage(TELEGRAM_API, chatId, `🛑 **Khoan đã! Sai ID Group rồi!**\n\n👁️ Bot đang thấy ID này: \`${chatId}\`\n📁 Nhưng Cloudflare lại cài ID này: \`${ALLOWED_GROUP_ID_ENV}\`\n\n👉 Hãy copy ID ở trên và sửa lại trong Cloudflare nhé!`);
+        await sendMessage(TELEGRAM_API, chatId, `🛑 **Bot chưa được cấp phép tại đây!**\n\n👁️ ID thực tế: \`${chatId}\`\n📁 ID trong Cloudflare: \`${ALLOWED_GROUP_ID_ENV}\``);
         return new Response("OK"); 
     }
 
     // 3. XỬ LÝ LỆNH /start
     if (text === "/start" || text.startsWith("/start@")) {
-        const welcomeMessage = `👋 **Chào mừng bạn đến với Bot Bypass Liên Kết!**\n\n` +
-                               `📌 **Các nền tảng hỗ trợ:**\n` +
-                               `\`Linkvertise, Loot-Link, Rekonise, Work.ink, Lockr.so, Shrtfly, Rinku.pro\``;
+        const welcomeMessage = `👋 **Chào ${mentionUser}!**\n\nHãy gửi link cần bypass vào đây để mình xử lý nhé.`;
         await sendMessage(TELEGRAM_API, chatId, welcomeMessage);
         return new Response("OK");
     }
 
-    // 4. CHỈ PHÂN TÍCH LINK
+    // 4. KIỂM TRA VÀ XỬ LÝ LINK HTTPS
     if (text.startsWith("https://")) {
       const allowedPlatforms = ["linkvertise", "link-center", "link-to", "up-to-down", "loot-link", "loot-links", "lootdest", "platorelay", "rekonise", "work.ink", "workink", "lockr.so", "shrtfly", "rinku.pro"];
-      const isAllowed = allowedPlatforms.some(platform => text.toLowerCase().includes(platform));
+      const isAllowed = allowedPlatforms.some(p => text.toLowerCase().includes(p));
+      
+      if (!isAllowed) return new Response("OK");
 
-      if (!isAllowed) return new Response("OK"); 
-
-      await sendMessage(TELEGRAM_API, chatId, "⏳ *Đang giải mã liên kết, vui lòng đợi...*");
+      await sendMessage(TELEGRAM_API, chatId, `⏳ ${mentionUser} *vui lòng đợi, đang giải mã...*`);
 
       const apiUrl = `https://api.izen.lol/v1/bypass?url=${encodeURIComponent(text)}`;
       const response = await fetch(apiUrl, { method: "GET", headers: { "x-api-key": API_KEY } });
       const apiData = await response.json();
 
-      const targetUrl = apiData.result || apiData.target || apiData.bypassed || apiData.url || apiData.destination || apiData.data?.target || apiData.data?.url || apiData.data?.bypassed;
+      const targetUrl = apiData.result || apiData.target || apiData.url || apiData.data?.target;
 
+      // 5. TRẢ KẾT QUẢ VÀ NHẮC TÊN
       if (targetUrl) {
-          await sendMessage(TELEGRAM_API, chatId, `✅ **Bypass Thành Công!**\n\n🚀 **Kết quả (Chạm để copy):**\n\`${targetUrl}\``);
+          // Sử dụng mentionUser để gọi tên người vừa gửi link
+          await sendMessage(TELEGRAM_API, chatId, `✅ **Bypass Thành Công!**\n\n👤 **Người gửi:** ${mentionUser}\n🚀 **Kết quả (Chạm để copy):**\n\`${targetUrl}\``);
       } else {
-          await sendMessage(TELEGRAM_API, chatId, `⚠️ **API trả về lỗi hoặc định dạng lạ:**\n\n\`\`\`json\n${JSON.stringify(apiData, null, 2)}\n\`\`\``);
+          await sendMessage(TELEGRAM_API, chatId, `⚠️ ${mentionUser} ơi, API báo lỗi rồi:\n\n\`\`\`json\n${JSON.stringify(apiData, null, 2)}\n\`\`\``);
       }
     } 
 
@@ -73,6 +77,11 @@ async function sendMessage(apiUrl, chatId, text) {
   await fetch(`${apiUrl}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: "Markdown", disable_web_page_preview: true })
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: "Markdown",
+      disable_web_page_preview: true
+    })
   });
 }
