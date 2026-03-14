@@ -12,70 +12,75 @@ export async function onRequestPost(context) {
     const chatId = message.chat.id;
     const chatType = message.chat.type;
     const text = message.text.trim();
-    const messageId = message.message_id; // ID tin nhắn người dùng gửi
+    const messageId = message.message_id;
     
     const user = message.from;
     const firstName = user.first_name || "Bạn";
     const mentionUser = `[${firstName}](tg://user?id=${user.id})`;
 
-    // 🕵️‍♂️ LỆNH /id
-    if (text === "/id" || text.startsWith("/id@")) {
-        await sendMessage(TELEGRAM_API, chatId, `🎯 **ID của cuộc trò chuyện này là:**\n\`${chatId}\``);
-        return new Response("OK");
-    }
-
+    // 1. KIỂM TRA QUYỀN TRUY CẬP
     const allowedGroups = ALLOWED_GROUP_ID_ENV.split(",").map(id => id.trim());
     const isPrivate = chatType === "private";
     const isAllowedGroup = allowedGroups.includes(String(chatId));
 
     if (!isPrivate && !isAllowedGroup) {
-        await sendMessage(TELEGRAM_API, chatId, `🛑 **Bot chưa được cấp phép tại đây!**\n\n👁️ ID thực tế: \`${chatId}\``);
-        return new Response("OK"); 
+        return new Response("OK"); // Không phải group mình thì im lặng
     }
 
+    // 2. LỆNH /START VỚI NỘI DUNG BẠN YÊU CẦU
     if (text === "/start" || text.startsWith("/start@")) {
-        await sendMessage(TELEGRAM_API, chatId, `👋 **Chào ${mentionUser}!**\nHãy gửi link cần bypass vào đây nhé.`);
+        const welcomeMessage = `👋 **Chào mừng bạn đến với Bot Bypass Liên Kết!**\n\n` +
+                               `🛠 **Cách sử dụng:**\n` +
+                               `1️⃣ Copy link rút gọn bạn cần vượt qua.\n` +
+                               `2️⃣ Dán và gửi trực tiếp link đó cho bot.\n` +
+                               `3️⃣ Chờ 1-2 giây, bot sẽ trả về link gốc. (Chạm vào kết quả để copy nhanh).\n\n` +
+                               `📌 **Các nền tảng hỗ trợ:**\n` +
+                               `*Linkvertise, Loot-Link, Rekonise, Work.ink, Lockr.so, Shrtfly, Rinku.pro*`;
+        
+        await sendMessage(TELEGRAM_API, chatId, welcomeMessage);
         return new Response("OK");
     }
 
+    // 🕵️‍♂️ LỆNH /ID
+    if (text === "/id" || text.startsWith("/id@")) {
+        await sendMessage(TELEGRAM_API, chatId, `🎯 **ID của cuộc trò chuyện này là:**\n\`${chatId}\``);
+        return new Response("OK");
+    }
+
+    // 3. XỬ LÝ LINK BYPASS
     if (text.startsWith("https://")) {
       const allowedPlatforms = ["linkvertise", "link-center", "link-to", "up-to-down", "loot-link", "loot-links", "lootdest", "platorelay", "rekonise", "work.ink", "workink", "lockr.so", "shrtfly", "rinku.pro"];
       const isAllowed = allowedPlatforms.some(p => text.toLowerCase().includes(p));
       if (!isAllowed) return new Response("OK");
 
-      // 1. Gửi tin nhắn chờ
-      const waitingMsg = await sendMessage(TELEGRAM_API, chatId, `⏳ ${mentionUser} *vui lòng đợi...*`);
+      // Gửi tin nhắn chờ
+      const waitingMsg = await sendMessage(TELEGRAM_API, chatId, `⏳ ${mentionUser} *vui lòng đợi, đang giải mã...*`);
       const waitingMsgId = waitingMsg?.result?.message_id;
 
-      // 2. Gọi API Bypass
+      // Gọi API
       const apiUrl = `https://api.izen.lol/v1/bypass?url=${encodeURIComponent(text)}`;
       const response = await fetch(apiUrl, { method: "GET", headers: { "x-api-key": API_KEY } });
       const apiData = await response.json();
       const targetUrl = apiData.result || apiData.target || apiData.url || apiData.data?.target;
 
-      // 3. Trả kết quả
+      // Trả kết quả
       let botResponse;
       if (targetUrl) {
-          botResponse = await sendMessage(TELEGRAM_API, chatId, `✅ **Bypass Thành Công!**\n\n👤 **Người gửi:** ${mentionUser}\n🚀 **Kết quả:**\n\`${targetUrl}\`\n\n🗑 _Tin nhắn này sẽ tự xóa sau 60s_`);
+          botResponse = await sendMessage(TELEGRAM_API, chatId, `✅ **Bypass Thành Công!**\n\n👤 **Người gửi:** ${mentionUser}\n🚀 **Kết quả (Chạm để copy):**\n\`${targetUrl}\`\n\n🗑 _Tin nhắn sẽ tự xóa sau 60s_`);
       } else {
           botResponse = await sendMessage(TELEGRAM_API, chatId, `⚠️ ${mentionUser} **API lỗi:**\n\`\`\`json\n${JSON.stringify(apiData, null, 2)}\n\`\`\``);
       }
 
       const responseMsgId = botResponse?.result?.message_id;
 
-      // 4. THIẾT LẬP TỰ ĐỘNG XÓA (Wait 60s)
-      // Lưu ý: Cloudflare Pages Functions có giới hạn thời gian chạy, 
-      // nhưng với 60s thì dùng waitUntil có thể hoạt động được.
+      // Tự động xóa sau 60s
       context.waitUntil(new Promise(resolve => {
           setTimeout(async () => {
-              // Xóa tin nhắn của người dùng
               await deleteMessage(TELEGRAM_API, chatId, messageId);
-              // Xóa tin nhắn chờ của bot
               if (waitingMsgId) await deleteMessage(TELEGRAM_API, chatId, waitingMsgId);
-              // Xóa tin nhắn kết quả của bot
               if (responseMsgId) await deleteMessage(TELEGRAM_API, chatId, responseMsgId);
               resolve();
-          }, 60000); // 60.000ms = 60s
+          }, 60000);
       }));
     } 
 
@@ -85,7 +90,6 @@ export async function onRequestPost(context) {
   }
 }
 
-// Hàm gửi tin nhắn (trả về dữ liệu để lấy message_id)
 async function sendMessage(apiUrl, chatId, text) {
   const res = await fetch(`${apiUrl}/sendMessage`, {
     method: "POST",
@@ -100,7 +104,6 @@ async function sendMessage(apiUrl, chatId, text) {
   return await res.json();
 }
 
-// Hàm xóa tin nhắn
 async function deleteMessage(apiUrl, chatId, messageId) {
   try {
     await fetch(`${apiUrl}/deleteMessage`, {
@@ -108,7 +111,5 @@ async function deleteMessage(apiUrl, chatId, messageId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, message_id: messageId })
     });
-  } catch (e) {
-    // Bỏ qua lỗi nếu tin nhắn đã bị xóa trước đó
-  }
+  } catch (e) {}
 }
