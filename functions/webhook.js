@@ -1,7 +1,9 @@
 export async function onRequestPost(context) {
-  // Lấy API Key và Token từ Biến môi trường (env) của Cloudflare
+  // 1. LẤY BIẾN MÔI TRƯỜNG TỪ CLOUDFLARE
   const API_KEY = context.env.API_KEY;
   const BOT_TOKEN = context.env.BOT_TOKEN;
+  const ALLOWED_GROUP_ID = context.env.ALLOWED_GROUP_ID; // Lấy ID Group được phép
+  
   const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
   try {
@@ -13,8 +15,14 @@ export async function onRequestPost(context) {
     const chatId = message.chat.id;
     const text = message.text.trim();
 
-    // 1. XỬ LÝ LỆNH /start
-    if (text === "/start") {
+    // 2. KIỂM TRA BẢO MẬT: XEM CÓ ĐÚNG GROUP KHÔNG?
+    // Nếu có thiết lập ALLOWED_GROUP_ID và ID chat hiện tại không khớp -> Bơ luôn
+    if (ALLOWED_GROUP_ID && String(chatId) !== String(ALLOWED_GROUP_ID)) {
+        return new Response("OK"); 
+    }
+
+    // 3. XỬ LÝ LỆNH /start
+    if (text === "/start" || text === `/start@${message.chat.username}`) {
         const welcomeMessage = `👋 **Chào mừng bạn đến với Bot Bypass Liên Kết!**\n\n` +
                                `🛠 **Cách sử dụng:**\n` +
                                `1️⃣ Copy link rút gọn bạn cần vượt qua.\n` +
@@ -27,7 +35,7 @@ export async function onRequestPost(context) {
         return new Response("OK");
     }
 
-    // 2. CHỈ PHÂN TÍCH LINK HTTPS
+    // 4. CHỈ PHÂN TÍCH LINK HTTPS
     if (text.startsWith("https://")) {
       
       const allowedPlatforms = [
@@ -52,7 +60,7 @@ export async function onRequestPost(context) {
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: { "x-api-key": API_KEY } // Sử dụng API_KEY từ env
+        headers: { "x-api-key": API_KEY } 
       });
 
       const result = await response.json();
