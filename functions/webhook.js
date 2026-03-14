@@ -2,7 +2,7 @@ export async function onRequestPost(context) {
   // 1. LẤY BIẾN MÔI TRƯỜNG TỪ CLOUDFLARE
   const API_KEY = context.env.API_KEY;
   const BOT_TOKEN = context.env.BOT_TOKEN;
-  const ALLOWED_GROUP_ID = context.env.ALLOWED_GROUP_ID; // Lấy ID Group được phép
+  const ALLOWED_GROUP_ID = context.env.ALLOWED_GROUP_ID; // ID Group của bạn
   
   const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -13,20 +13,26 @@ export async function onRequestPost(context) {
     if (!message || !message.text) return new Response("OK");
 
     const chatId = message.chat.id;
+    const chatType = message.chat.type; // "private", "group", "supergroup", "channel"
     const text = message.text.trim();
 
-    // 2. KIỂM TRA BẢO MẬT: XEM CÓ ĐÚNG GROUP KHÔNG?
-    // Nếu có thiết lập ALLOWED_GROUP_ID và ID chat hiện tại không khớp -> Bơ luôn
-    if (ALLOWED_GROUP_ID && String(chatId) !== String(ALLOWED_GROUP_ID)) {
+    // 2. CHỐT CHẶN BẢO MẬT THÔNG MINH
+    // - isPrivate: Tin nhắn riêng từ bất kỳ ai -> CHO PHÉP
+    // - isAllowedGroup: Tin nhắn từ đúng Group của bạn -> CHO PHÉP
+    const isPrivate = chatType === "private";
+    const isAllowedGroup = ALLOWED_GROUP_ID && String(chatId) === String(ALLOWED_GROUP_ID);
+
+    // Nếu không phải nhắn riêng VÀ cũng không phải Group của mình -> IM LẶNG
+    if (!isPrivate && !isAllowedGroup) {
         return new Response("OK"); 
     }
 
-    // 3. XỬ LÝ LỆNH /start
-    if (text === "/start" || text === `/start@${message.chat.username}`) {
+    // 3. XỬ LÝ LỆNH /start (Hỗ trợ cả chat riêng và tag tên bot trong group)
+    if (text === "/start" || text.startsWith("/start@")) {
         const welcomeMessage = `👋 **Chào mừng bạn đến với Bot Bypass Liên Kết!**\n\n` +
                                `🛠 **Cách sử dụng:**\n` +
                                `1️⃣ Copy link rút gọn bạn cần vượt qua.\n` +
-                               `2️⃣ Dán và gửi trực tiếp link đó vào nhóm chat này.\n` +
+                               `2️⃣ Dán và gửi trực tiếp link đó cho bot.\n` +
                                `3️⃣ Chờ 1-2 giây, bot sẽ trả về link gốc. (Chạm vào kết quả để copy nhanh).\n\n` +
                                `📌 **Các nền tảng hỗ trợ:**\n` +
                                `\`Linkvertise, Loot-Link, Rekonise, Work.ink, Lockr.so, Shrtfly, Rinku.pro\``;
@@ -35,7 +41,7 @@ export async function onRequestPost(context) {
         return new Response("OK");
     }
 
-    // 4. CHỈ PHÂN TÍCH LINK HTTPS
+    // 4. CHỈ PHÂN TÍCH LINK HTTPS VÀ THUỘC DANH SÁCH CHO PHÉP
     if (text.startsWith("https://")) {
       
       const allowedPlatforms = [
@@ -54,6 +60,7 @@ export async function onRequestPost(context) {
          return new Response("OK"); 
       }
 
+      // 5. BẮT ĐẦU BYPASS
       await sendMessage(TELEGRAM_API, chatId, "⏳ *Đang giải mã liên kết, vui lòng đợi...*");
 
       const apiUrl = `https://api.izen.lol/v1/bypass?url=${encodeURIComponent(text)}`;
@@ -67,6 +74,7 @@ export async function onRequestPost(context) {
 
       const targetUrl = result.target || result.bypassed || result.url || result.destination || result.data?.target || result.data?.url || result.data?.bypassed;
 
+      // 6. TRẢ KẾT QUẢ
       if (targetUrl) {
           await sendMessage(TELEGRAM_API, chatId, `✅ **Bypass Thành Công!**\n\n🚀 **Kết quả (Chạm để copy):**\n\`${targetUrl}\``);
       } else {
