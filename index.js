@@ -2,65 +2,114 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // XỬ LÝ API BYPASS
+    // 1. XỬ LÝ API CHO WEBSITE (Bypass)
     if (request.method === "POST" && url.pathname === "/api/bypass") {
       try {
         const { targetUrl } = await request.json();
         const apiUrl = `https://api.izen.lol/v1/bypass?url=${encodeURIComponent(targetUrl)}`;
+        
         const res = await fetch(apiUrl, {
           method: "GET",
           headers: { "x-api-key": env.IZEN_API_KEY }
         });
+
         const data = await res.json();
-        return new Response(JSON.stringify(data), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify(data), {
+          headers: { "content-type": "application/json" }
+        });
       } catch (e) {
-        return new Response(JSON.stringify({ message: "Lỗi API" }), { status: 500 });
+        return new Response(JSON.stringify({ message: "Lỗi kết nối API" }), { status: 500 });
       }
     }
 
-    // TRẢ VỀ GIAO DIỆN WEB
+    // 2. TRẢ VỀ GIAO DIỆN WEBSITE CHO NGƯỜI DÙNG
     return new Response(this.html(), {
       headers: { "content-type": "text/html;charset=UTF-8" },
     });
   },
 
-  // HÀM HTML PHẢI NẰM SAU DẤU PHẨY CỦA HÀM FETCH VÀ TRƯỚC DẤU ĐÓNG } CUỐI CÙNG
+  // HÀM CHỨA GIAO DIỆN HTML
   html() {
     return `
     <!DOCTYPE html>
-    <html>
-      <head>
+    <html lang="vi">
+    <head>
         <meta charset="UTF-8">
-        <title>Bypass Key Delta</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>iZen Hub - Bypass & IPA</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        
+        <script src='https://hairsromance.com/g_q7aDmbA6aQh_XP/NVmh3f9uxKIU/zfv1OaVj8ATdn9EoEUL/Sghia89fFxp9UPfhw/EFtHxA8b4FCkRQEKW/olNVY/jXefY8K8Jq3EcEhNQn/tgHzaiCkWC49/dyzeXgu5z'></script>
         <script src="https://offeringchewjean.com/47/a9/13/47a913b960040fe7926ec0833cfc6151.js"></script>
-      </head>
-      <body class="bg-slate-900 text-white p-5">
-        <div class="max-w-md mx-auto">
-            <h1 class="text-2xl font-bold mb-5">Bypass & IPA</h1>
-            <input type="text" id="targetUrl" class="w-full p-2 bg-slate-800 border border-slate-700 rounded mb-2" placeholder="Dán link...">
-            <button onclick="handle()" class="w-full bg-blue-600 p-2 rounded">Bypass</button>
-            <div id="res" class="mt-4 p-2 bg-black rounded hidden break-all"></div>
+
+        <style>
+            body { background: #0f172a; color: #f8fafc; font-family: sans-serif; }
+            .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        </style>
+    </head>
+    <body class="py-10 px-4">
+        <div class="max-w-md mx-auto space-y-6">
             
-            <div class="mt-10">
-                <h2 class="font-bold mb-2 text-emerald-400">File iPA Delta</h2>
-                <a href="https://cdn.khoindvn.io.vn/DeltaVN.ipa" class="block p-3 bg-slate-800 rounded mb-2 underline">Tải Delta IPA</a>
+            <div class="flex justify-center">
+                <script type="text/javascript">
+                    atOptions = {'key' : '3434ba1486d99ce41866b861388f09c5', 'format' : 'iframe', 'height' : 50, 'width' : 320, 'params' : {}};
+                </script>
+                <script type="text/javascript" src="https://hairsromance.com/3434ba1486d99ce41866b861388f09c5/invoke.js"></script>
             </div>
+
+            <div class="glass p-6 rounded-2xl shadow-xl">
+                <h2 class="text-xl font-bold text-sky-400 mb-4 text-center">🔗 Link Bypass</h2>
+                <input type="text" id="targetUrl" placeholder="Dán link vào đây..." 
+                    class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 mb-3 focus:outline-none focus:border-sky-500">
+                <button onclick="handleBypass()" id="btn" class="w-full bg-sky-500 text-slate-900 font-bold py-3 rounded-xl active:scale-95 transition-all">Bypass Ngay</button>
+                <div id="resultBox" class="hidden mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 break-all text-sky-300 font-mono text-sm">
+                    <span id="resText"></span>
+                </div>
+            </div>
+
+            <div class="glass p-6 rounded-2xl shadow-xl">
+                <h2 class="text-xl font-bold text-emerald-400 mb-4 text-center">📦 File IPA Delta VN</h2>
+                <div class="space-y-3">
+                    <a href="https://cdn.khoindvn.io.vn/DeltaVN.ipa" target="_blank" class="flex items-center justify-between p-4 bg-slate-800 rounded-xl hover:bg-slate-700">
+                        <span>Delta Executor</span>
+                        <span class="text-xs font-bold text-emerald-400">DOWNLOAD File</span>
+                    </a>
+                </div>
+            </div>
+
         </div>
+
         <script>
-          async function handle() {
-            const out = document.getElementById('res');
-            out.innerText = 'Đang chạy...';
-            out.classList.remove('hidden');
-            const res = await fetch('/api/bypass', {
-              method: 'POST',
-              body: JSON.stringify({ targetUrl: document.getElementById('targetUrl').value })
-            });
-            const data = await res.json();
-            out.innerText = data.result || 'Lỗi!';
-          }
+            async function handleBypass() {
+                const input = document.getElementById('targetUrl');
+                const btn = document.getElementById('btn');
+                const resBox = document.getElementById('resultBox');
+                const resText = document.getElementById('resText');
+
+                if(!input.value) return alert('Dán link đã bạn ơi!');
+                
+                btn.disabled = true;
+                btn.innerText = 'Đang xử lý...';
+                resBox.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/api/bypass', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ targetUrl: input.value })
+                    });
+                    const data = await response.json();
+                    resBox.classList.remove('hidden');
+                    resText.innerText = data.result || data.message || 'Lỗi xử lý!';
+                } catch (e) {
+                    alert('Lỗi hệ thống!');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Bypass Ngay';
+                }
+            }
         </script>
-      </body>
+    </body>
     </html>`;
   }
-}; // Dấu đóng ngoặc này cực kỳ quan trọng
+};
