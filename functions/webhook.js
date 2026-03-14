@@ -21,8 +21,7 @@ export async function onRequestPost(context) {
     const isPrivate = chatType === "private";
     const isAllowedGroup = allowedGroups.includes(String(chatId));
 
-    if (!isPrivate && !isAllowedGroup) {
-        return new Response("OK"); 
+    return await sendMessage(TELEGRAM_API, chatId, `⚠️ ID của Group này là: ${chatId}`);
     }
 
     // 3. XỬ LÝ LỆNH /start
