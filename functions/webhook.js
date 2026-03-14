@@ -2,7 +2,7 @@ export async function onRequestPost(context) {
   // 1. LẤY BIẾN MÔI TRƯỜNG TỪ CLOUDFLARE
   const API_KEY = context.env.API_KEY;
   const BOT_TOKEN = context.env.BOT_TOKEN;
-  const ALLOWED_GROUP_ID = context.env.ALLOWED_GROUP_ID; // ID Group của bạn
+  const ALLOWED_GROUP_ID_ENV = context.env.ALLOWED_GROUP_ID || ""; // Chuỗi ID các group
   
   const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -16,18 +16,19 @@ export async function onRequestPost(context) {
     const chatType = message.chat.type; // "private", "group", "supergroup", "channel"
     const text = message.text.trim();
 
-    // 2. CHỐT CHẶN BẢO MẬT THÔNG MINH
-    // - isPrivate: Tin nhắn riêng từ bất kỳ ai -> CHO PHÉP
-    // - isAllowedGroup: Tin nhắn từ đúng Group của bạn -> CHO PHÉP
+    // 2. CHỐT CHẶN BẢO MẬT: HỖ TRỢ NHIỀU GROUP
+    // Tách chuỗi "-100123,-100456" thành danh sách ["-100123", "-100456"]
+    const allowedGroups = ALLOWED_GROUP_ID_ENV.split(",").map(id => id.trim());
+    
     const isPrivate = chatType === "private";
-    const isAllowedGroup = ALLOWED_GROUP_ID && String(chatId) === String(ALLOWED_GROUP_ID);
+    const isAllowedGroup = allowedGroups.includes(String(chatId));
 
-    // Nếu không phải nhắn riêng VÀ cũng không phải Group của mình -> IM LẶNG
+    // Nếu không phải nhắn riêng VÀ cũng không nằm trong danh sách Group cho phép -> IM LẶNG
     if (!isPrivate && !isAllowedGroup) {
         return new Response("OK"); 
     }
 
-    // 3. XỬ LÝ LỆNH /start (Hỗ trợ cả chat riêng và tag tên bot trong group)
+    // 3. XỬ LÝ LỆNH /start
     if (text === "/start" || text.startsWith("/start@")) {
         const welcomeMessage = `👋 **Chào mừng bạn đến với Bot Bypass Liên Kết!**\n\n` +
                                `🛠 **Cách sử dụng:**\n` +
